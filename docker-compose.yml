@@ -1,4 +1,8 @@
 version: '2'
+volumes:
+  pgdata:
+    driver: local
+    per_container: true
 services:
   memcached:
     image: memcached:1.5.7-alpine
@@ -74,3 +78,29 @@ services:
       RABBITMQ_ERLANG_COOKIE: awx-erlang-cookie
     stdin_open: true
     tty: true
+  postgres-lb:
+    image: rancher/lb-service-haproxy
+    ports:
+    - 5432:5432/tcp
+    labels:
+      io.rancher.container.agent.role: environmentAdmin
+      io.rancher.container.create_agent: 'true'
+  postgres-data:
+    image: busybox
+    volumes:
+    - pgdata:/var/lib/postgresql/data/pgdata
+    labels:
+          io.rancher.container.start_once: 'true'
+  postgres:
+    image: postgres:9.6-alpine
+    environment:
+      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_DB: awxdatabase
+      POSTGRES_PASSWORD: awx
+      POSTGRES_USER: awx
+    stdin_open: true
+    tty: true
+    volumes_from:
+    - postgres-data
+    labels:
+      io.rancher.sidekicks: postgres-data
