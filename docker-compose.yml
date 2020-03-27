@@ -1,0 +1,76 @@
+version: '2'
+services:
+  memcached:
+    image: memcached:1.5.7-alpine
+    stdin_open: true
+    tty: true
+  awx-web:
+    image: ansible/awx_web:1.0.6.15
+    hostname: awxweb
+    environment:
+      AWX_ADMIN_PASSWORD: password
+      AWX_ADMIN_USER: admin
+      DATABASE_HOST: postgres
+      DATABASE_NAME: awxdatabase
+      DATABASE_PASSWORD: awx
+      DATABASE_PORT: '5432'
+      DATABASE_USER: awx
+      MEMCACHED_HOST: memcached
+      MEMCACHED_PORT: '11211'
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PASSWORD: guest
+      RABBITMQ_PORT: '5672'
+      RABBITMQ_USER: guest
+      RABBITMQ_VHOST: awx
+      SECRET_KEY: someRandomSecretKey
+    stdin_open: true
+    external_links:
+    - awxpostgres/postgres-lb:postgres
+    tty: true
+    links:
+    - rabbitmq:rabbitmq
+    - memcached:memcached
+    user: root
+  awx-lb:
+    image: rancher/lb-service-haproxy:v0.9.13
+    ports:
+    - 8052:8052/tcp
+    labels:
+      io.rancher.container.agent.role: environmentAdmin,agent
+      io.rancher.container.agent_service.drain_provider: 'true'
+      io.rancher.container.create_agent: 'true'
+  awx-task:
+    image: ansible/awx_task:1.0.6.15
+    hostname: awx
+    environment:
+      AWX_ADMIN_PASSWORD: password
+      AWX_ADMIN_USER: admin
+      DATABASE_HOST: postgres
+      DATABASE_NAME: awxdatabase
+      DATABASE_PASSWORD: awx
+      DATABASE_PORT: '5432'
+      DATABASE_USER: awx
+      MEMCACHED_HOST: memcached
+      MEMCACHED_PORT: '11211'
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PASSWORD: guest
+      RABBITMQ_PORT: '5672'
+      RABBITMQ_USER: guest
+      RABBITMQ_VHOST: awx
+      SECRET_KEY: someRandomSecretKey
+    stdin_open: true
+    external_links:
+    - awxpostgres/postgres-lb:postgres
+    tty: true
+    links:
+    - awx-web:web
+    - rabbitmq:rabbitmq
+    - memcached:memcached
+    user: root
+  rabbitmq:
+    image: rabbitmq:3.7.4-alpine
+    environment:
+      RABBITMQ_DEFAULT_VHOST: awx
+      RABBITMQ_ERLANG_COOKIE: awx-erlang-cookie
+    stdin_open: true
+    tty: true
