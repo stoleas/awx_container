@@ -8,6 +8,13 @@ services:
     image: memcached:1.5.7-alpine
     stdin_open: true
     tty: true
+  postgres-lb:
+    image: rancher/lb-service-haproxy
+    ports:
+    - 5432:5432/tcp
+    labels:
+      io.rancher.container.agent.role: environmentAdmin
+      io.rancher.container.create_agent: 'true'
   awx-web:
     image: ansible/awx_web:latest
     hostname: awxweb
@@ -30,10 +37,16 @@ services:
     stdin_open: true
     tty: true
     links:
-    - rabbitmq:rabbitmq
     - memcached:memcached
-    - postgres-lb:postgres
+    - rabbitmq:rabbitmq
+    - postgres-lb:postgres-lb
     user: root
+  postgres-data:
+    image: busybox
+    volumes:
+    - pgdata:/var/lib/postgresql/data/pgdata
+    labels:
+      io.rancher.container.start_once: 'true'
   awx-lb:
     image: rancher/lb-service-haproxy:v0.9.13
     ports:
@@ -42,6 +55,13 @@ services:
       io.rancher.container.agent.role: environmentAdmin,agent
       io.rancher.container.agent_service.drain_provider: 'true'
       io.rancher.container.create_agent: 'true'
+  rabbitmq:
+    image: rabbitmq:3.7.4-alpine
+    environment:
+      RABBITMQ_DEFAULT_VHOST: awx
+      RABBITMQ_ERLANG_COOKIE: awx-erlang-cookie
+    stdin_open: true
+    tty: true
   awx-task:
     image: ansible/awx_task:latest
     hostname: awx
@@ -64,31 +84,11 @@ services:
     stdin_open: true
     tty: true
     links:
-    - awx-web:web
-    - rabbitmq:rabbitmq
     - memcached:memcached
-    - postgres-lb:postgres
+    - rabbitmq:rabbitmq
+    - postgres-lb:postgres-lb
+    - awx-web:awx-web
     user: root
-  rabbitmq:
-    image: rabbitmq:3.7.4-alpine
-    environment:
-      RABBITMQ_DEFAULT_VHOST: awx
-      RABBITMQ_ERLANG_COOKIE: awx-erlang-cookie
-    stdin_open: true
-    tty: true
-  postgres-lb:
-    image: rancher/lb-service-haproxy
-    ports:
-    - 5432:5432/tcp
-    labels:
-      io.rancher.container.agent.role: environmentAdmin
-      io.rancher.container.create_agent: 'true'
-  postgres-data:
-    image: busybox
-    volumes:
-    - pgdata:/var/lib/postgresql/data/pgdata
-    labels:
-          io.rancher.container.start_once: 'true'
   postgres:
     image: postgres:9.6-alpine
     environment:
