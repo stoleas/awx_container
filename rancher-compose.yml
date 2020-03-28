@@ -3,10 +3,7 @@ services:
   memcached:
     scale: 1
     start_on_create: true
-  postgresql:
-    scale: 1
-    start_on_create: true
-  postgresql-data:
+  postgres:
     scale: 1
     start_on_create: true
   awx-web:
@@ -16,8 +13,5 @@ services:
     scale: 1
     start_on_create: true
   awx-task:
-    scale: 1
-    start_on_create: true
-  awx-config:
     scale: 1
     start_on_create: true

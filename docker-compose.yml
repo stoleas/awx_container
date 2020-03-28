@@ -1,89 +1,77 @@
 version: '2'
 
-volumes:
-  awx-pgdata1:
-    driver: local
-  awx_config:
-    driver: local
-  
 services:
   memcached:
     image: memcached:1.5.7-alpine
     stdin_open: true
     tty: true
+    networks:
+      awx_net:
 
   rabbitmq:
     image: rabbitmq:3.7.4-alpine
     environment:
       RABBITMQ_DEFAULT_VHOST: awx
+      RABBITMQ_ERLANG_COOKIE: cookiemonster
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: password
     stdin_open: true
     tty: true
+    networks:
+      awx_net:
 
-  postgresql:
+  postgres:
     image: postgres:9.6.8-alpine
     environment:
       PGDATA: /var/lib/postgresql/data/pgdata
-      POSTGRES_DB: awxdatabase
       POSTGRES_PASSWORD: password
+      POSTGRES_DB: awx
       POSTGRES_USER: awx
-    stdin_open: true
-    tty: true
-    volumes_from:
-    - postgresql-data
-    labels:
-      io.rancher.sidekicks: postgresql-data
-
-  postgresql-data:
-    image: busybox
-    stdin_open: true
-    tty: true
     volumes:
-    - awx-pgdata1:/var/lib/postgresql/data/pgdata
-    labels:
-      io.rancher.container.start_once: 'true'
+      - awx_db:/var/lib/postgresql/data/pgdata
+    stdin_open: true
+    tty: true
+    networks:
+      awx_net:
 
   awx-web:
-    image: ansible/awx_web:9.3.0
+    image: stoleas/awx_web:9.3.0
     hostname: awxweb
-    environment:
-      MEMCACHED_HOST: memcached
-      MEMCACHED_PORT: '11211'
     stdin_open: true
     tty: true
-    links:
-    - postgresql:postgres
-    - rabbitmq:rabbitmq
-    - memcached:memcached
-    volumes_from:
-    - awx-config
     user: root
     ports:
       - "8052:8052"
+    labels:
+      io.rancher.container.pull_image: always
+    networks:
+      awx_net:
+        aliases:
+          - devtask
 
   awx-task:
-    image: ansible/awx_task:9.3.0
+    image: stoleas/awx_task:9.3.0
+    command: /usr/bin/launch_awx_task.sh
     hostname: awx
-    environment:
-      MEMCACHED_HOST: memcached
-      MEMCACHED_PORT: '11211'
+    depends_on:
+      - rabbitmq
+      - memcached
+      - awx-web
+      - postgres
     stdin_open: true
     tty: true
-    links:
-    - awx-web:web
-    - postgresql:postgres
-    - rabbitmq:rabbitmq
-    - memcached:memcached
-    volumes_from:
-      - awx-config
     user: root
-
-  awx-config:
-    image: stoleas/awx_config:9.3.0
-    stdin_open: true
-    tty: true
-    volumes:
-    - awx_config1:/etc/tower/conf.d/environment.sh
-    - awx_config1:/etc/tower/conf.d/credentials.py
-    - awx_config1:/etc/tower/SECRET_KEY
     labels:
-      io.rancher.container.start_once: 'true'
+      io.rancher.container.pull_image: always
+    networks:
+      awx_net:
+        aliases:
+          - devtask
+
+volumes:
+  awx_db:
+    driver: local
+
+networks:
+  awx_net:
+    external: true
