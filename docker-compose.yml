@@ -1,104 +1,89 @@
 version: '2'
+
 volumes:
-  pgdata:
+  awx-pgdata1:
     driver: local
-    per_container: true
+  awx_config:
+    driver: local
+  
 services:
   memcached:
     image: memcached:1.5.7-alpine
     stdin_open: true
     tty: true
-  postgres-lb:
-    image: rancher/lb-service-haproxy
-    ports:
-    - 5432:5432/tcp
-    labels:
-      io.rancher.container.agent.role: environmentAdmin
-      io.rancher.container.create_agent: 'true'
-  awx-web:
-    image: ansible/awx_web:latest
-    hostname: awxweb
-    environment:
-      AWX_ADMIN_PASSWORD: password
-      AWX_ADMIN_USER: admin
-      DATABASE_HOST: postgres
-      DATABASE_NAME: awxdatabase
-      DATABASE_PASSWORD: awx
-      DATABASE_PORT: '5432'
-      DATABASE_USER: awx
-      MEMCACHED_HOST: memcached
-      MEMCACHED_PORT: '11211'
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PASSWORD: guest
-      RABBITMQ_PORT: '5672'
-      RABBITMQ_USER: guest
-      RABBITMQ_VHOST: awx
-      SECRET_KEY: someRandomSecretKey
-    stdin_open: true
-    tty: true
-    links:
-    - memcached:memcached
-    - rabbitmq:rabbitmq
-    - postgres-lb:postgres-lb
-    user: root
-  postgres-data:
-    image: busybox
-    volumes:
-    - pgdata:/var/lib/postgresql/data/pgdata
-    labels:
-      io.rancher.container.start_once: 'true'
-  awx-lb:
-    image: rancher/lb-service-haproxy:v0.9.13
-    ports:
-    - 8052:8052/tcp
-    labels:
-      io.rancher.container.agent.role: environmentAdmin,agent
-      io.rancher.container.agent_service.drain_provider: 'true'
-      io.rancher.container.create_agent: 'true'
+
   rabbitmq:
     image: rabbitmq:3.7.4-alpine
     environment:
       RABBITMQ_DEFAULT_VHOST: awx
-      RABBITMQ_ERLANG_COOKIE: awx-erlang-cookie
     stdin_open: true
     tty: true
-  awx-task:
-    image: ansible/awx_task:latest
-    hostname: awx
-    environment:
-      AWX_ADMIN_PASSWORD: password
-      AWX_ADMIN_USER: admin
-      DATABASE_HOST: postgres
-      DATABASE_NAME: awxdatabase
-      DATABASE_PASSWORD: awx
-      DATABASE_PORT: '5432'
-      DATABASE_USER: awx
-      MEMCACHED_HOST: memcached
-      MEMCACHED_PORT: '11211'
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PASSWORD: guest
-      RABBITMQ_PORT: '5672'
-      RABBITMQ_USER: guest
-      RABBITMQ_VHOST: awx
-      SECRET_KEY: someRandomSecretKey
-    stdin_open: true
-    tty: true
-    links:
-    - memcached:memcached
-    - rabbitmq:rabbitmq
-    - postgres-lb:postgres-lb
-    - awx-web:awx-web
-    user: root
-  postgres:
-    image: postgres:9.6-alpine
+
+  postgresql:
+    image: postgres:9.6.8-alpine
     environment:
       PGDATA: /var/lib/postgresql/data/pgdata
       POSTGRES_DB: awxdatabase
-      POSTGRES_PASSWORD: awx
+      POSTGRES_PASSWORD: password
       POSTGRES_USER: awx
     stdin_open: true
     tty: true
     volumes_from:
-    - postgres-data
+    - postgresql-data
     labels:
-      io.rancher.sidekicks: postgres-data
+      io.rancher.sidekicks: postgresql-data
+
+  postgresql-data:
+    image: busybox
+    stdin_open: true
+    tty: true
+    volumes:
+    - awx-pgdata1:/var/lib/postgresql/data/pgdata
+    labels:
+      io.rancher.container.start_once: 'true'
+
+  awx-web:
+    image: ansible/awx_web:9.3.0
+    hostname: awxweb
+    environment:
+      MEMCACHED_HOST: memcached
+      MEMCACHED_PORT: '11211'
+    stdin_open: true
+    tty: true
+    links:
+    - postgresql:postgres
+    - rabbitmq:rabbitmq
+    - memcached:memcached
+    volumes_from:
+    - awx-config
+    user: root
+    ports:
+      - "8052:8052"
+
+  awx-task:
+    image: ansible/awx_task:9.3.0
+    hostname: awx
+    environment:
+      MEMCACHED_HOST: memcached
+      MEMCACHED_PORT: '11211'
+    stdin_open: true
+    tty: true
+    links:
+    - awx-web:web
+    - postgresql:postgres
+    - rabbitmq:rabbitmq
+    - memcached:memcached
+    volumes_from:
+      - awx-config
+    user: root
+
+  awx-config:
+    image: stoleas/awx_config:9.3.0
+    stdin_open: true
+    tty: true
+    volumes:
+    - awx_config1:/etc/tower/conf.d/environment.sh
+    - awx_config1:/etc/tower/conf.d/credentials.py
+    - awx_config1:/etc/tower/SECRET_KEY
+    labels:
+      io.rancher.container.start_once: 'true'
